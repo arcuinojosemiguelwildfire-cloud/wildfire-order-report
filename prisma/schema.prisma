@@ -1,0 +1,160 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  fullName      String
+  email         String   @unique
+  passwordHash  String
+  role          String   // ADMIN or ENCODER
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ordersCreated      Order[]            @relation("OrderCreatedBy")
+  usagesCreated      UsageTransaction[] @relation("UsageCreatedBy")
+  auditLogs          AuditLog[]
+}
+
+model Supplier {
+  id            String   @id @default(uuid())
+  supplierName  String
+  contactPerson String
+  contactNumber String
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  orders        Order[]
+}
+
+model Event {
+  id         String   @id @default(uuid())
+  eventName  String
+  clientName String
+  eventDate  DateTime
+  venue      String
+  status     String
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  usages     UsageTransaction[]
+}
+
+model Employee {
+  id            String   @id @default(uuid())
+  fullName      String
+  department    String
+  contactNumber String?
+  isActive      Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  usages        UsageTransaction[]
+}
+
+model OfficeLocation {
+  id           String   @id @default(uuid())
+  locationName String
+  department   String
+  description  String?
+  createdAt    DateTime @default(now())
+
+  usages       UsageTransaction[]
+}
+
+model Order {
+  id                 String   @id @default(uuid())
+  orderNumber        String   @unique
+  orderTitle         String
+  supplierId         String
+  poOrInvoiceNumber  String
+  dateOrdered        DateTime
+  dateReceived       DateTime
+  overallCondition   String
+  status             String   // Available, Partially Used, Fully Used, Closed
+  notes              String?
+  createdBy          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  supplier           Supplier @relation(fields: [supplierId], references: [id])
+  creator            User     @relation("OrderCreatedBy", fields: [createdBy], references: [id])
+  items              OrderItem[]
+}
+
+model OrderItem {
+  id               String   @id @default(uuid())
+  orderId          String
+  itemName         String
+  category         String
+  unit             String
+  itemType         String   // CONSUMABLE or REUSABLE
+  quantityReceived Int
+  minimumStock     Int
+  condition        String
+  storageLocation  String
+  unitCost         Float?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  order            Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactionItems UsageTransactionItem[]
+}
+
+model UsageTransaction {
+  id               String   @id @default(uuid())
+  usageReference   String   @unique
+  usageDate        DateTime
+  usageType        String   // EVENT, OFFICE, EMPLOYEE_REPLACEMENT, DAMAGE_LOSS, RETURN, ADJUSTMENT
+  eventId          String?
+  employeeId       String?
+  officeLocationId String?
+  reason           String?
+  notes            String?
+  status           String   @default("ACTIVE") // ACTIVE or VOIDED
+  voidReason       String?
+  createdBy        String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  event            Event?          @relation(fields: [eventId], references: [id])
+  employee         Employee?       @relation(fields: [employeeId], references: [id])
+  officeLocation   OfficeLocation? @relation(fields: [officeLocationId], references: [id])
+  creator          User            @relation("UsageCreatedBy", fields: [createdBy], references: [id])
+  items            UsageTransactionItem[]
+}
+
+model UsageTransactionItem {
+  id                 String   @id @default(uuid())
+  usageTransactionId String
+  orderItemId        String
+  quantity           Int
+  movementType       String   // CONSUMED, TEMPORARY_ISSUE, RETURNED, DAMAGED, REPLACED, ADJUSTMENT_IN, ADJUSTMENT_OUT
+  itemCondition      String
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  usageTransaction   UsageTransaction @relation(fields: [usageTransactionId], references: [id], onDelete: Cascade)
+  orderItem          OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  actionType String
+  entityType String
+  entityId   String
+  oldValues  String   // JSON text
+  newValues  String   // JSON text
+  remarks    String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+}
