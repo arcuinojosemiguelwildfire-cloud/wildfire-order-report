@@ -111,17 +111,9 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
     }
   };
 
-  // Helper check for Encoders: can edit notes only if created on the same day by the same user
+  // All guest operators have permission to edit usage notes
   const canUserEditNotes = (tx: UsageTransaction) => {
-    if (currentUser.role === 'ADMIN') return true;
-    
-    // Check if created by current user
-    if (tx.createdBy !== currentUser.id) return false;
-
-    // Check if created today (Manila Timezone check is handled robustly via calendar date check)
-    const txDate = new Date(tx.createdAt).toDateString();
-    const today = new Date().toDateString();
-    return txDate === today;
+    return true;
   };
 
   return (
@@ -169,9 +161,6 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
               <option value="EVENT">Event Use</option>
               <option value="OFFICE">Office Use</option>
               <option value="EMPLOYEE_REPLACEMENT">Employee Replacement</option>
-              <option value="DAMAGE_LOSS">Damage / Loss</option>
-              <option value="RETURN">Return From Event</option>
-              <option value="ADJUSTMENT">Stock Adjustment</option>
             </select>
           </div>
 
@@ -206,28 +195,30 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
             <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] tracking-wider border-b border-slate-200">
               <tr>
                 <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Reference No</th>
                 <th className="py-3 px-4">Type</th>
-                <th className="py-3 px-4">Destination / Recipient Reason</th>
-                <th className="py-3 px-4">Items Transacted</th>
-                <th className="py-3 px-4">Recorded By</th>
+                <th className="py-3 px-4">Event / Office / Employee</th>
+                <th className="py-3 px-4">Items</th>
+                <th className="py-3 px-4 text-center">Quantity</th>
                 <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4">Notes</th>
+                <th className="py-3 px-4">Encoded By</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading && usages.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">Loading ledger logs...</td>
+                  <td colSpan={9} className="py-8 text-center text-slate-400">Loading ledger logs...</td>
                 </tr>
               ) : usages.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">No matching usage logs discovered.</td>
+                  <td colSpan={9} className="py-8 text-center text-slate-400">No matching usage logs discovered.</td>
                 </tr>
               ) : (
                 usages.map((tx) => {
                   const isVoided = tx.status === 'VOIDED';
-                  const itemSummary = tx.items?.map(i => `${i.orderItem?.itemName} (${i.quantity} ${i.orderItem?.unit})`).join(', ') || '-';
+                  const itemSummary = tx.items?.map(i => `${i.orderItem?.itemName}`).join(', ') || '-';
+                  const totalQuantity = tx.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
                   
                   return (
                     <tr
@@ -236,7 +227,6 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
                       className={`hover:bg-slate-50/50 cursor-pointer transition ${isVoided ? 'line-through text-slate-400 opacity-60' : ''}`}
                     >
                       <td className="py-3 px-4">{formatDate(tx.usageDate)}</td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{tx.usageReference}</td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${
                           tx.usageType === 'EVENT' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' :
@@ -252,7 +242,7 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
                         {tx.reason || '-'}
                       </td>
                       <td className="py-3 px-4 truncate max-w-[250px]" title={itemSummary}>{itemSummary}</td>
-                      <td className="py-3 px-4">{tx.creator?.fullName || 'System'}</td>
+                      <td className="py-3 px-4 text-center font-bold text-slate-700">{totalQuantity}</td>
                       <td className="py-3 px-4 text-center">
                         <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${
                           isVoided ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-green-100 text-green-700 border border-green-200'
@@ -260,6 +250,10 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
                           {tx.status}
                         </span>
                       </td>
+                      <td className="py-3 px-4 truncate max-w-[150px] text-slate-400 italic" title={tx.notes || ''}>
+                        {tx.notes || '-'}
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-600">{tx.encodedBy || 'Guest Operator'}</td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-center items-center gap-2">
                           <button
@@ -281,7 +275,7 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
                             </button>
                           )}
 
-                          {currentUser.role === 'ADMIN' && !isVoided && (
+                          {!isVoided && (
                             <button
                               onClick={(e) => handleOpenVoidModal(e, tx.id)}
                               className="p-1 hover:bg-red-50 rounded text-red-500 hover:text-red-700 transition"
@@ -308,7 +302,7 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
           <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Usage Details</span>
-              <h2 className="text-sm font-bold text-slate-800 mt-0.5">{selectedTx.usageReference}</h2>
+              <h2 className="text-sm font-bold text-indigo-600 mt-0.5">TX-{selectedTx.id.substring(0, 8).toUpperCase()}</h2>
             </div>
             <button onClick={() => setIsDetailsOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded">
               <X size={16} />
@@ -330,6 +324,35 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
                   {selectedTx.status}
                 </span>
               </div>
+
+              {selectedTx.usageType === 'EVENT' && (
+                <>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Event Name</span>
+                    <span className="font-semibold text-slate-800 mt-1 block">{selectedTx.eventName || '-'}</span>
+                  </div>
+                  {selectedTx.venue && (
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Venue / Location</span>
+                      <span className="font-semibold text-slate-800 mt-1 block">{selectedTx.venue}</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {selectedTx.usageType === 'EMPLOYEE_REPLACEMENT' && (
+                <>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Employee Name</span>
+                    <span className="font-semibold text-slate-800 mt-1 block">{selectedTx.employeeName || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Employee Department</span>
+                    <span className="font-semibold text-slate-800 mt-1 block">{selectedTx.employeeDepartment || '-'}</span>
+                  </div>
+                </>
+              )}
+
               <div className="col-span-2">
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Recipient Destination / Reason</span>
                 <span className="font-semibold text-slate-800 mt-1 block bg-slate-50 p-2 border border-slate-100 rounded">{selectedTx.reason || '-'}</span>
@@ -338,8 +361,8 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
 
             {selectedTx.status === 'VOIDED' && (
               <div className="p-3 bg-red-50 border border-red-100 text-red-800 rounded-lg">
-                <span className="font-bold">Cancellation Reason (Void Audit):</span>
-                <p className="mt-1">{selectedTx.voidReason || 'No explicit reason specified.'}</p>
+                <span className="font-bold">Cancellation Details (Void Audit):</span>
+                <p className="mt-1">{selectedTx.notes || 'Transaction marked as VOIDED.'}</p>
               </div>
             )}
 
@@ -351,13 +374,13 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
                   <div key={item.id} className="p-3 bg-slate-50 border border-slate-100 rounded-lg flex justify-between items-center">
                     <div>
                       <h4 className="font-bold text-slate-800">{item.orderItem?.itemName}</h4>
-                      <span className="text-[9px] text-slate-400 block mt-0.5">Category: {item.orderItem?.category} • Condition: {item.itemCondition}</span>
-                      {item.notes && <p className="text-[10px] italic text-slate-500 mt-1">Item note: {item.notes}</p>}
+                      <span className="text-[9px] text-slate-400 block mt-0.5">Category: {item.orderItem?.category || 'General'}</span>
+                      {item.itemNotes && <p className="text-[10px] italic text-slate-500 mt-1">Item note: {item.itemNotes}</p>}
                     </div>
                     <div className="text-right">
-                      <span className="text-xs font-bold text-slate-900 block">{item.quantity} {item.orderItem?.unit}</span>
+                      <span className="text-xs font-bold text-slate-900 block">{item.quantity} pcs</span>
                       <span className="text-[8px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1 py-0.5 rounded font-semibold inline-block mt-1">
-                        {item.movementType}
+                        {selectedTx.usageType === 'EVENT' ? 'DEPLOYED' : 'CONSUMED'}
                       </span>
                     </div>
                   </div>
@@ -376,7 +399,7 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
             {/* Internal metadata */}
             <div className="border-t border-slate-100 pt-4 text-[9px] text-slate-400 space-y-1">
               <div>Record Registered: {formatDate(selectedTx.createdAt, true)}</div>
-              <div>Authorized Encoded By: {selectedTx.creator?.fullName || 'System Admin'}</div>
+              <div>Authorized Encoded By: {selectedTx.encodedBy || 'Guest Operator'}</div>
             </div>
           </div>
         </div>

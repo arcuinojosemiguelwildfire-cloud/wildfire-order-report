@@ -6,57 +6,17 @@ export interface User {
   isActive: boolean;
 }
 
-export interface Supplier {
-  id: string;
-  supplierName: string;
-  contactPerson: string;
-  contactNumber: string;
-  notes?: string;
-  createdAt?: string;
-}
-
-export interface Event {
-  id: string;
-  eventName: string;
-  clientName: string;
-  eventDate: string;
-  venue: string;
-  status: string;
-  notes?: string;
-}
-
-export interface Employee {
-  id: string;
-  fullName: string;
-  department: string;
-  contactNumber?: string;
-  isActive: boolean;
-  notes?: string;
-}
-
-export interface OfficeLocation {
-  id: string;
-  locationName: string;
-  department: string;
-  description?: string;
-}
-
 export interface Order {
   id: string;
-  orderNumber: string;
+  orderNumber: number;
   orderTitle: string;
-  supplierId: string;
-  supplierName?: string;
-  poOrInvoiceNumber: string;
-  dateOrdered: string;
   dateReceived: string;
   overallCondition: string;
-  status: 'Available' | 'Partially Used' | 'Fully Used' | 'Closed';
+  status: string;
   notes?: string;
-  createdBy: string;
+  encodedBy?: string;
   createdAt?: string;
-  supplier?: Supplier;
-  creator?: User;
+  updatedAt?: string;
   items?: OrderItem[];
 }
 
@@ -64,44 +24,47 @@ export interface OrderItem {
   id: string;
   orderId: string;
   itemName: string;
-  category: string;
-  unit: string;
+  category?: string;
   itemType: 'CONSUMABLE' | 'REUSABLE';
   quantityReceived: number;
-  minimumStock: number;
-  condition: string;
-  storageLocation: string;
-  unitCost?: number;
+  quantityUsed?: number;
+  quantityDeployed?: number;
+  quantityReturned?: number;
+  availableQuantity?: number;
+  currentStatus?: string;
   notes?: string;
-  
-  // Client calculated balances
+  createdAt?: string;
+  updatedAt?: string;
+
+  // UI / Compat helpers
+  unit?: string;
+  minimumStock?: number;
+  condition?: string;
+  storageLocation?: string;
+  unitCost?: number;
+  isReusable?: boolean;
   qtyUsed?: number;
   qtyDeployed?: number;
-  qtyReturned?: number;
-  qtyDamaged?: number;
   qtyAvailable?: number;
   liveStatus?: string;
 }
 
 export interface UsageTransaction {
   id: string;
-  usageReference: string;
   usageDate: string;
-  usageType: 'EVENT' | 'OFFICE' | 'EMPLOYEE_REPLACEMENT' | 'DAMAGE_LOSS' | 'RETURN' | 'ADJUSTMENT';
-  eventId?: string;
-  employeeId?: string;
-  officeLocationId?: string;
+  usageType: 'EVENT' | 'OFFICE' | 'EMPLOYEE_REPLACEMENT';
+  eventName?: string;
+  venue?: string;
+  officeUseDetails?: string;
+  employeeName?: string;
+  employeeDepartment?: string;
   reason?: string;
+  encodedBy: string;
   notes?: string;
   status: 'ACTIVE' | 'VOIDED';
-  voidReason?: string;
-  createdBy: string;
   createdAt: string;
-  
-  event?: Event;
-  employee?: Employee;
-  officeLocation?: OfficeLocation;
-  creator?: User;
+  updatedAt?: string;
+
   items?: UsageTransactionItem[];
 }
 
@@ -110,21 +73,20 @@ export interface UsageTransactionItem {
   usageTransactionId: string;
   orderItemId: string;
   quantity: number;
-  movementType: 'CONSUMED' | 'TEMPORARY_ISSUE' | 'RETURNED' | 'DAMAGED' | 'REPLACED' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT';
-  itemCondition: string;
-  notes?: string;
+  itemNotes?: string;
+  createdAt?: string;
+
+  // Relations
   orderItem?: OrderItem;
 }
 
 export interface AuditLog {
   id: string;
-  userId: string;
   actionType: string;
   entityType: string;
   entityId: string;
-  oldValues: string;
-  newValues: string;
-  remarks?: string;
-  createdAt: string;
-  user?: User;
+  beforeData: string;
+  afterData: string;
+  notes?: string;
+  timestamp: string;
 }

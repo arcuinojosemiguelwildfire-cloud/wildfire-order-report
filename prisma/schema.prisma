@@ -1,160 +1,91 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
-model User {
-  id            String   @id @default(uuid())
-  fullName      String
-  email         String   @unique
-  passwordHash  String
-  role          String   // ADMIN or ENCODER
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  ordersCreated      Order[]            @relation("OrderCreatedBy")
-  usagesCreated      UsageTransaction[] @relation("UsageCreatedBy")
-  auditLogs          AuditLog[]
-}
-
-model Supplier {
-  id            String   @id @default(uuid())
-  supplierName  String
-  contactPerson String
-  contactNumber String
-  notes         String?
-  createdAt     DateTime @default(now())
-
-  orders        Order[]
-}
-
-model Event {
-  id         String   @id @default(uuid())
-  eventName  String
-  clientName String
-  eventDate  DateTime
-  venue      String
-  status     String
-  notes      String?
-  createdAt  DateTime @default(now())
-
-  usages     UsageTransaction[]
-}
-
-model Employee {
-  id            String   @id @default(uuid())
-  fullName      String
-  department    String
-  contactNumber String?
-  isActive      Boolean  @default(true)
-  notes         String?
-  createdAt     DateTime @default(now())
-
-  usages        UsageTransaction[]
-}
-
-model OfficeLocation {
-  id           String   @id @default(uuid())
-  locationName String
-  department   String
-  description  String?
-  createdAt    DateTime @default(now())
-
-  usages       UsageTransaction[]
-}
-
 model Order {
-  id                 String   @id @default(uuid())
-  orderNumber        String   @unique
-  orderTitle         String
-  supplierId         String
-  poOrInvoiceNumber  String
-  dateOrdered        DateTime
-  dateReceived       DateTime
-  overallCondition   String
-  status             String   // Available, Partially Used, Fully Used, Closed
-  notes              String?
-  createdBy          String
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id               String      @id @default(uuid())
+  orderNumber      Int         @unique @default(autoincrement()) @map("order_number")
+  orderTitle       String      @map("order_title")
+  dateReceived     DateTime    @map("date_received")
+  overallCondition String      @map("overall_condition")
+  status           String
+  notes            String?
+  encodedBy        String?     @map("encoded_by")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  items            OrderItem[]
 
-  supplier           Supplier @relation(fields: [supplierId], references: [id])
-  creator            User     @relation("OrderCreatedBy", fields: [createdBy], references: [id])
-  items              OrderItem[]
+  @@map("orders")
 }
 
 model OrderItem {
-  id               String   @id @default(uuid())
-  orderId          String
-  itemName         String
-  category         String
-  unit             String
-  itemType         String   // CONSUMABLE or REUSABLE
-  quantityReceived Int
-  minimumStock     Int
-  condition        String
-  storageLocation  String
-  unitCost         Float?
-  notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String                 @id @default(uuid())
+  orderId           String                 @map("order_id")
+  itemName          String                 @map("item_name")
+  category          String?
+  itemType          String                 @map("item_type") // CONSUMABLE or REUSABLE
+  quantityReceived  Int                    @map("quantity_received")
+  quantityUsed      Int                    @default(0) @map("quantity_used")
+  quantityDeployed  Int                    @default(0) @map("quantity_deployed")
+  quantityReturned  Int                    @default(0) @map("quantity_returned")
+  availableQuantity Int                    @default(0) @map("available_quantity")
+  currentStatus     String                 @map("current_status")
+  notes             String?
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  order             Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactionItems  UsageTransactionItem[]
 
-  order            Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  transactionItems UsageTransactionItem[]
+  @@map("order_items")
 }
 
 model UsageTransaction {
-  id               String   @id @default(uuid())
-  usageReference   String   @unique
-  usageDate        DateTime
-  usageType        String   // EVENT, OFFICE, EMPLOYEE_REPLACEMENT, DAMAGE_LOSS, RETURN, ADJUSTMENT
-  eventId          String?
-  employeeId       String?
-  officeLocationId String?
-  reason           String?
-  notes            String?
-  status           String   @default("ACTIVE") // ACTIVE or VOIDED
-  voidReason       String?
-  createdBy        String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String                 @id @default(uuid())
+  usageDate          DateTime               @map("usage_date")
+  usageType          String                 @map("usage_type") // EVENT, OFFICE, or EMPLOYEE_REPLACEMENT
+  eventName          String?                @map("event_name")
+  venue              String?                @map("venue")
+  officeUseDetails   String?                @map("office_use_details")
+  employeeName       String?                @map("employee_name")
+  employeeDepartment String?                @map("employee_department")
+  reason             String?                @map("reason")
+  encodedBy          String                 @map("encoded_by")
+  notes              String?
+  status             String                 @default("ACTIVE") // ACTIVE or VOIDED
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  items              UsageTransactionItem[]
 
-  event            Event?          @relation(fields: [eventId], references: [id])
-  employee         Employee?       @relation(fields: [employeeId], references: [id])
-  officeLocation   OfficeLocation? @relation(fields: [officeLocationId], references: [id])
-  creator          User            @relation("UsageCreatedBy", fields: [createdBy], references: [id])
-  items            UsageTransactionItem[]
+  @@map("usage_transactions")
 }
 
 model UsageTransactionItem {
-  id                 String   @id @default(uuid())
-  usageTransactionId String
-  orderItemId        String
+  id                 String           @id @default(uuid())
+  usageTransactionId String           @map("usage_transaction_id")
+  orderItemId        String           @map("order_item_id")
   quantity           Int
-  movementType       String   // CONSUMED, TEMPORARY_ISSUE, RETURNED, DAMAGED, REPLACED, ADJUSTMENT_IN, ADJUSTMENT_OUT
-  itemCondition      String
-  notes              String?
-  createdAt          DateTime @default(now())
-
+  itemNotes          String?          @map("item_notes")
+  createdAt          DateTime         @default(now()) @map("created_at")
   usageTransaction   UsageTransaction @relation(fields: [usageTransactionId], references: [id], onDelete: Cascade)
   orderItem          OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@map("usage_transaction_items")
 }
 
 model AuditLog {
   id         String   @id @default(uuid())
-  userId     String
-  actionType String
-  entityType String
-  entityId   String
-  oldValues  String   // JSON text
-  newValues  String   // JSON text
-  remarks    String?
-  createdAt  DateTime @default(now())
+  actionType String   @map("action_type")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  beforeData String   @map("before_data")
+  afterData  String   @map("after_data")
+  notes      String?
+  timestamp  DateTime @default(now()) @map("timestamp")
 
-  user       User     @relation(fields: [userId], references: [id])
+  @@map("audit_logs")
 }

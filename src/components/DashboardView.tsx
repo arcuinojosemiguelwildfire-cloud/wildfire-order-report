@@ -33,6 +33,7 @@ export default function DashboardView() {
     totalUsedThisMonth: 0,
     totalAvailable: 0,
     currentlyDeployed: 0,
+    pendingReturn: 0,
     lowStockItems: 0,
     outOfStockItems: 0,
   });
@@ -83,19 +84,34 @@ export default function DashboardView() {
         statsQuery = `?startDate=${encodeURIComponent(sDate)}&endDate=${encodeURIComponent(eDate)}`;
       }
       const statsData = await apiGet(`/dashboard/stats${statsQuery}`);
-      setStats(statsData);
+      setStats({
+        totalReceived: 0,
+        totalUsedThisMonth: 0,
+        totalAvailable: 0,
+        currentlyDeployed: 0,
+        pendingReturn: 0,
+        lowStockItems: 0,
+        outOfStockItems: 0,
+        ...statsData
+      });
 
       // 2. Get charts
       const chartsData = await apiGet('/dashboard/charts');
-      setCharts(chartsData);
+      setCharts({
+        trend: [],
+        purpose: [],
+        topItems: [],
+        topEvents: [],
+        ...chartsData
+      });
 
       // 3. Get recent usages
       const recentUsagesData = await apiGet('/usages');
-      setRecentUsages(recentUsagesData.slice(0, 5));
+      setRecentUsages((Array.isArray(recentUsagesData) ? recentUsagesData : []).slice(0, 5));
 
       // 4. Get items balance (for low stock list)
-      const balances = await apiGet('/reports/items-balances');
-      const lowStock = balances.filter(
+      const balances = await apiGet('/dashboard/low-stock');
+      const lowStock = (Array.isArray(balances) ? balances : []).filter(
         (item: any) => item.qtyAvailable <= item.minimumStock || item.qtyAvailable === 0
       );
       setLowStockList(lowStock.slice(0, 5));
@@ -172,26 +188,16 @@ export default function DashboardView() {
         <div className="bg-white border border-slate-200 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.015)] p-5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300">
           <div className="flex justify-between items-start text-slate-400 mb-2">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Received</span>
-            <Boxes size={18} className="text-slate-400" />
+            <Boxes size={18} className="text-indigo-600" />
           </div>
           <div className="text-xl font-bold text-slate-900">{stats.totalReceived}</div>
           <p className="text-[10px] text-slate-400 mt-1">Total across all batches</p>
         </div>
 
-        {/* Total Used This Month */}
-        <div className="bg-white border border-slate-200 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.015)] p-5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300">
-          <div className="flex justify-between items-start text-indigo-500 mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Consumed</span>
-            <Activity size={18} className="text-indigo-500" />
-          </div>
-          <div className="text-xl font-bold text-slate-900">{stats.totalUsedThisMonth}</div>
-          <p className="text-[10px] text-slate-400 mt-1">Consumed, replaced, lost</p>
-        </div>
-
-        {/* Current Available Balance */}
+        {/* Available In Stock */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.015)] p-5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300">
           <div className="flex justify-between items-start text-emerald-500 mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Available Stock</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Available In Stock</span>
             <CheckCircle size={18} className="text-emerald-500" />
           </div>
           <div className="text-xl font-bold text-slate-900">{stats.totalAvailable}</div>
@@ -205,7 +211,17 @@ export default function DashboardView() {
             <Clock size={18} className="text-blue-500" />
           </div>
           <div className="text-xl font-bold text-slate-900">{stats.currentlyDeployed}</div>
-          <p className="text-[10px] text-slate-400 mt-1">Pending return from events</p>
+          <p className="text-[10px] text-slate-400 mt-1">Active deployments</p>
+        </div>
+
+        {/* Pending Return */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.015)] p-5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300">
+          <div className="flex justify-between items-start text-indigo-500 mb-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Return</span>
+            <Calendar size={18} className="text-indigo-500" />
+          </div>
+          <div className="text-xl font-bold text-slate-900">{stats.pendingReturn}</div>
+          <p className="text-[10px] text-slate-400 mt-1">Reusable item lines</p>
         </div>
 
         {/* Low Stock Items */}
@@ -215,13 +231,13 @@ export default function DashboardView() {
             <AlertTriangle size={18} className="text-amber-500" />
           </div>
           <div className="text-xl font-bold text-slate-900">{stats.lowStockItems}</div>
-          <p className="text-[10px] text-slate-400 mt-1">Equal or below min stock</p>
+          <p className="text-[10px] text-slate-400 mt-1">At or below min stock</p>
         </div>
 
         {/* Out of Stock Items */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.015)] p-5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300">
           <div className="flex justify-between items-start text-red-500 mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Out of Stock</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Out of Stock / Fully Used</span>
             <XCircle size={18} className="text-red-500" />
           </div>
           <div className="text-xl font-bold text-slate-900">{stats.outOfStockItems}</div>
@@ -355,32 +371,30 @@ export default function DashboardView() {
               <thead className="bg-slate-50 text-slate-400 uppercase text-[9px] tracking-widest border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-3">Date</th>
-                  <th className="py-2.5 px-3">Usage Ref.</th>
                   <th className="py-2.5 px-3">Type</th>
                   <th className="py-2.5 px-3">Destination/Recipient</th>
                   <th className="py-2.5 px-3">Items Summary</th>
-                  <th className="py-2.5 px-3">Recorded By</th>
+                  <th className="py-2.5 px-3">Encoded By</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {recentUsages.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-4 text-center text-slate-400">No usage records yet.</td>
+                    <td colSpan={5} className="py-4 text-center text-slate-400">No usage records yet.</td>
                   </tr>
                 ) : (
                   recentUsages.map((tx) => {
                     let recipient = '-';
-                    if (tx.usageType === 'EVENT') recipient = tx.event?.eventName || 'Event';
-                    else if (tx.usageType === 'OFFICE') recipient = tx.officeLocation?.locationName || 'Office';
-                    else if (tx.usageType === 'EMPLOYEE_REPLACEMENT') recipient = tx.employee?.fullName || 'Employee';
+                    if (tx.usageType === 'EVENT') recipient = tx.eventName || 'Event';
+                    else if (tx.usageType === 'OFFICE') recipient = tx.reason || 'Office';
+                    else if (tx.usageType === 'EMPLOYEE_REPLACEMENT') recipient = tx.employeeName || 'Employee';
                     else recipient = tx.reason || 'Damage/Loss';
 
-                    const itemsSummary = tx.items?.map(i => `${i.orderItem?.itemName} (${i.quantity} ${i.orderItem?.unit})`).join(', ') || '-';
+                    const itemsSummary = tx.items?.map(i => `${i.orderItem?.itemName} (x${i.quantity})`).join(', ') || '-';
 
                     return (
                       <tr key={tx.id} className="hover:bg-slate-50/50 transition">
                         <td className="py-2.5 px-3">{formatDate(tx.usageDate)}</td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-700">{tx.usageReference}</td>
                         <td className="py-2.5 px-3">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-medium border ${
                             tx.usageType === 'EVENT' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' :
@@ -394,7 +408,7 @@ export default function DashboardView() {
                         </td>
                         <td className="py-2.5 px-3 text-slate-700 font-medium truncate max-w-[150px]">{recipient}</td>
                         <td className="py-2.5 px-3 truncate max-w-[200px]" title={itemsSummary}>{itemsSummary}</td>
-                        <td className="py-2.5 px-3">{tx.creator?.fullName || 'System'}</td>
+                        <td className="py-2.5 px-3">{tx.encodedBy || 'Guest Operator'}</td>
                       </tr>
                     );
                   })

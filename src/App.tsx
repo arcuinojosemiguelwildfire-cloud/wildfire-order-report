@@ -1,78 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { apiGet, removeAuthToken, getAuthToken } from './utils/api.ts';
+import React, { useState } from 'react';
 import { User } from './types.ts';
 
 // View Components
-import Login from './components/Login.tsx';
 import DashboardView from './components/DashboardView.tsx';
 import OrdersView from './components/OrdersView.tsx';
 import OrderDetailsView from './components/OrderDetailsView.tsx';
 import UsageRecordsView from './components/UsageRecordsView.tsx';
-import EventsRecipientsView from './components/EventsRecipientsView.tsx';
-import ReportsView from './components/ReportsView.tsx';
-import SettingsView from './components/SettingsView.tsx';
 
 // Icons
 import {
   LayoutDashboard,
   Boxes,
-  FileText,
-  Users,
-  TrendingUp,
-  Settings as SettingsIcon,
-  LogOut,
-  Shield,
   Activity
 } from 'lucide-react';
 
-type Tab = 'dashboard' | 'orders' | 'usages' | 'recipients' | 'reports' | 'settings';
+type Tab = 'dashboard' | 'orders' | 'usages';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Frictionless access: hardcoded admin user for backward-compatibility with view prop signatures
+  const [currentUser] = useState<User>({
+    id: 'guest',
+    fullName: 'Guest Operator',
+    email: 'guest@tracker.com',
+    role: 'ADMIN',
+    isActive: true,
+  });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [viewOrderId, setViewOrderId] = useState<string | null>(null);
-
-  // Auto restore session on load
-  useEffect(() => {
-    const restoreSession = async () => {
-      const token = getAuthToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const user = await apiGet('/auth/me');
-        setCurrentUser(user);
-      } catch (err) {
-        console.warn('Session expired or invalid.');
-        removeAuthToken();
-      } finally {
-        setLoading(false);
-      }
-    };
-    restoreSession();
-  }, []);
-
-  const handleLogout = () => {
-    removeAuthToken();
-    setCurrentUser(null);
-    setActiveTab('dashboard');
-    setViewOrderId(null);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-slate-500 text-sm">Authenticating session...</div>
-      </div>
-    );
-  }
-
-  // Not logged in -> Show login
-  if (!currentUser) {
-    return <Login onLoginSuccess={(user) => setCurrentUser(user)} />;
-  }
 
   return (
     <div className="flex h-screen bg-slate-50/50 text-slate-800 overflow-hidden font-sans">
@@ -86,7 +40,7 @@ export default function App() {
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900 leading-tight">Order Tracker</h2>
-              <span className="text-[9px] text-slate-400 font-bold tracking-wider uppercase">Event Supply Ops</span>
+              <span className="text-[9px] text-slate-400 font-bold tracking-wider uppercase">Supply Ops</span>
             </div>
           </div>
 
@@ -94,11 +48,8 @@ export default function App() {
           <nav className="p-4 space-y-1.5 flex-1">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-              { id: 'orders', label: 'Orders & Batches', icon: Boxes },
-              { id: 'usages', label: 'Usage Records', icon: Activity },
-              { id: 'recipients', label: 'Events & Recipients', icon: Users },
-              { id: 'reports', label: 'Custom Reports', icon: TrendingUp },
-              { id: 'settings', label: 'System Settings', icon: SettingsIcon }
+              { id: 'orders', label: 'Orders', icon: Boxes },
+              { id: 'usages', label: 'Usage Records', icon: Activity }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -125,27 +76,20 @@ export default function App() {
           </nav>
         </div>
 
-        {/* 2. USER PROFILE INFO BOX AND SIGN OUT */}
+        {/* 2. FRICTIONLESS ACCESS SYSTEM STATUS */}
         <div className="p-4 border-t border-slate-200 bg-slate-50/40">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 shadow-xs">
-              <Shield size={18} className="text-slate-500" />
+            <div className="w-9 h-9 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-100 shadow-xs">
+              <Activity size={18} className="text-emerald-600 animate-pulse" />
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-bold text-slate-900 truncate" title={currentUser.fullName}>
-                {currentUser.fullName}
+              <h4 className="text-xs font-bold text-slate-950 truncate">
+                Access: Fully Open
               </h4>
-              <span className="inline-block px-1.5 py-0.5 rounded-full text-[8px] font-bold tracking-wide mt-0.5 bg-indigo-50 border border-indigo-100/60 text-indigo-700">
-                {currentUser.role}
+              <span className="text-[10px] text-slate-400 font-bold tracking-tight block">
+                No passwords or login required
               </span>
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
-              title="Logout"
-            >
-              <LogOut size={16} />
-            </button>
           </div>
         </div>
       </aside>
@@ -171,12 +115,6 @@ export default function App() {
           )}
 
           {activeTab === 'usages' && <UsageRecordsView currentUser={currentUser} />}
-
-          {activeTab === 'recipients' && <EventsRecipientsView currentUser={currentUser} />}
-
-          {activeTab === 'reports' && <ReportsView />}
-
-          {activeTab === 'settings' && <SettingsView currentUser={currentUser} />}
         </div>
       </main>
     </div>
