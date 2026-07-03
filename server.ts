@@ -156,6 +156,19 @@ async function startServer() {
     next();
   };
 
+  // --- DATABASE URL CHECKING MIDDLEWARE ---
+  const checkDatabaseUrl = (req: any, res: any, next: any) => {
+    if (!process.env.DATABASE_URL) {
+      return res.status(500).json({
+        error: 'Database configuration missing. Please click the "Settings" button in the top-right corner of AI Studio, add a secret named DATABASE_URL with your Neon connection string, and restart the server.',
+        isDbConfigMissing: true
+      });
+    }
+    next();
+  };
+
+  app.use('/api', checkDatabaseUrl);
+
   // --- ENDPOINTS ---
 
   // Mock Authentication Endpoints (Bypassed frictionless access)

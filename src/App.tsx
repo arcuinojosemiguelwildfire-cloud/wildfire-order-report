@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from './types.ts';
 
 // View Components
@@ -11,7 +11,8 @@ import UsageRecordsView from './components/UsageRecordsView.tsx';
 import {
   LayoutDashboard,
   Boxes,
-  Activity
+  Activity,
+  Database
 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'orders' | 'usages';
@@ -27,6 +28,23 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [viewOrderId, setViewOrderId] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Perform a quick connection check to check if database configuration is missing
+    fetch('/api/auth/me')
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.isDbConfigMissing || (data.error && data.error.includes('Database configuration'))) {
+            setDbError(data.error);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Error verifying database status:', err);
+      });
+  }, []);
 
   return (
     <div className="flex h-screen bg-slate-50/50 text-slate-800 overflow-hidden font-sans">
@@ -97,6 +115,38 @@ export default function App() {
       {/* 3. SCROLLABLE MAIN CONTENT CANVAS */}
       <main className="flex-1 overflow-y-auto p-8 relative">
         <div className="max-w-7xl mx-auto space-y-6">
+          {dbError && (
+            <div className="bg-amber-50 border-l-4 border-amber-600 p-6 rounded-xl shadow-xs space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-100 rounded-lg text-amber-800">
+                  <Database size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Database Connection Required</h3>
+                  <p className="text-xs text-slate-600 mt-1">
+                    This application operates on a PostgreSQL database using Prisma, but the <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[11px] text-pink-600">DATABASE_URL</code> environment variable is missing.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/80 rounded-lg p-4 space-y-3 text-xs text-slate-700 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)]">
+                <span className="font-bold text-slate-900 block">How to configure the database connection:</span>
+                <ol className="list-decimal list-inside space-y-1.5 pl-1">
+                  <li>Click the <strong className="text-slate-900">Settings</strong> icon in the top-right corner of Google AI Studio.</li>
+                  <li>In the panel, scroll down to the <strong className="text-slate-900">Secrets</strong> section.</li>
+                  <li>Add a new secret:
+                    <div className="mt-1.5 ml-4 space-y-1 bg-slate-50 border border-slate-200 p-2 rounded-md font-mono text-[11px] text-slate-600 max-w-lg select-all">
+                      <div>Name: <span className="font-bold text-slate-800">DATABASE_URL</span></div>
+                      <div>Value: <span className="text-indigo-600">postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require</span></div>
+                    </div>
+                  </li>
+                  <li className="mt-1.5">Click <strong className="text-slate-900">Save Secrets</strong>.</li>
+                  <li>Click <strong className="text-slate-900">Restart Dev Server</strong> in Google AI Studio to apply your credentials.</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'dashboard' && <DashboardView />}
 
           {activeTab === 'orders' && (
