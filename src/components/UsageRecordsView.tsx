@@ -44,7 +44,8 @@ export default function UsageRecordsView({ currentUser }: UsageRecordsViewProps)
 
       const queryStr = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
       const data = await apiGet(`/usages${queryStr}`);
-      setUsages(data);
+      const list = Array.isArray(data) ? data : (data?.usageRecords || []);
+      setUsages(list);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch usage ledger.');
     } finally {

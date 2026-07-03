@@ -77,14 +77,16 @@ export default function OrderDetailsView({ currentUser, orderId, onBack }: Order
 
       // Get usages to extract active references for returning items
       const usagesData = await apiGet('/usages');
-      const activeList = (Array.isArray(usagesData) ? usagesData : []).filter(
+      const usagesList = Array.isArray(usagesData) ? usagesData : (usagesData?.usageRecords || []);
+      const activeList = usagesList.filter(
         (u: any) => u.status === 'ACTIVE'
       );
       setActiveUsages(activeList);
 
       // Fetch usage history specific to this order
       const orderUsagesData = await apiGet(`/usages?orderId=${orderId}`);
-      setOrderUsages(Array.isArray(orderUsagesData) ? orderUsagesData : []);
+      const orderUsagesList = Array.isArray(orderUsagesData) ? orderUsagesData : (orderUsagesData?.usageRecords || []);
+      setOrderUsages(orderUsagesList);
 
     } catch (err: any) {
       setError(err.message || 'Error loading order details.');
@@ -319,13 +321,13 @@ export default function OrderDetailsView({ currentUser, orderId, onBack }: Order
       const response = await apiPost('/usage', payload);
       console.log('[DEBUG] API response:', response);
 
-      if (response && response.success) {
+      if (response && !response.error) {
         setToast({ type: 'success', message: 'Usage record saved successfully.' });
         setIsUsageOpen(false);
         fetchOrderDetails();
         window.dispatchEvent(new CustomEvent('stock-updated'));
       } else {
-        const errMsg = response?.message || 'Failed to record usage transaction.';
+        const errMsg = response?.message || response?.error || 'Failed to record usage transaction.';
         setToast({ type: 'error', message: errMsg });
       }
     } catch (err: any) {

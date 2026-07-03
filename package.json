@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
+    "build": "prisma generate && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "start": "tsx server.ts",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@netlify/functions": "^5.3.0",
     "@prisma/client": "^6.19.3",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",

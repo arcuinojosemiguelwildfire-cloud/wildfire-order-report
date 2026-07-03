@@ -107,7 +107,8 @@ export default function DashboardView() {
 
       // 3. Get recent usages
       const recentUsagesData = await apiGet('/usages');
-      setRecentUsages((Array.isArray(recentUsagesData) ? recentUsagesData : []).slice(0, 5));
+      const recentUsagesList = Array.isArray(recentUsagesData) ? recentUsagesData : (recentUsagesData?.usageRecords || []);
+      setRecentUsages(recentUsagesList.slice(0, 5));
 
       // 4. Get items balance (for low stock list)
       const balances = await apiGet('/dashboard/low-stock');
