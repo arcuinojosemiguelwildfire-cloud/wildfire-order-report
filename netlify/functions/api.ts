@@ -1,11 +1,35 @@
 import type { Config, Context } from "@netlify/functions";
-import { prisma } from "../../src/db/client.ts";
+import { PrismaClient } from "@prisma/client";
 
 process.env.TZ = "Asia/Manila";
 
+let prisma: PrismaClient | null = null;
+
+function getPrisma() {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+
+  if (!databaseUrl) {
+    const error = new Error("DATABASE_URL_MISSING");
+    error.name = "DATABASE_URL_MISSING";
+    throw error;
+  }
+
+  if (!prisma) {
+    prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: databaseUrl,
+        },
+      },
+    });
+  }
+
+  return prisma;
+}
+
 // Status recalculate engine for serverless environments
 const syncOrderAndItemStatuses = async (orderId: string, tx: any) => {
-  const prismaTx = tx || prisma;
+  const prismaTx = tx || getPrisma();
 
   const items = await prismaTx.orderItem.findMany({
     where: { orderId },
@@ -121,52 +145,78 @@ export default async (req: Request, context: Context) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // Check DATABASE_URL existence
-  if (!process.env.DATABASE_URL) {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+
+  // 1. GET /api/health
+  if (path === "/api/health" && method === "GET") {
+    if (!databaseUrl) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "DATABASE_URL_MISSING",
+          message: "Database configuration is unavailable.",
+          diagnostic: {
+            databaseUrlPresent: false,
+            runtime: "netlify-serverless-function"
+          }
+        }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    try {
+      await getPrisma().$queryRaw`SELECT 1`;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "API is running.",
+          database: "connected",
+          diagnostic: {
+            databaseUrlPresent: true,
+            runtime: "netlify-serverless-function"
+          }
+        }),
+        { status: 200, headers: corsHeaders }
+      );
+    } catch (dbErr: any) {
+      console.error("Health check database connection failed:", dbErr);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "DATABASE_CONNECTION_FAILED",
+          message: "Database connection failed.",
+          diagnostic: {
+            databaseUrlPresent: true,
+            runtime: "netlify-serverless-function"
+          }
+        }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+  }
+
+  // Fail-fast logic for all other endpoints if database URL is missing
+  if (!databaseUrl) {
     return new Response(
       JSON.stringify({
         success: false,
-        message: "Database configuration is unavailable.",
+        code: "DATABASE_URL_MISSING",
+        message: "Database configuration is unavailable."
       }),
       { status: 500, headers: corsHeaders }
     );
   }
 
   try {
-    // 1. GET /api/health
-    if (path === "/api/health" && method === "GET") {
-      try {
-        await prisma.$queryRaw`SELECT 1`;
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "API is running.",
-            database: "connected",
-          }),
-          { status: 200, headers: corsHeaders }
-        );
-      } catch (dbErr: any) {
-        console.error("Health check database connection failed:", dbErr);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            message: "API is running but database is offline.",
-            database: "disconnected",
-          }),
-          { status: 500, headers: corsHeaders }
-        );
-      }
-    }
-
     // 2. GET /api/dashboard
     if (path === "/api/dashboard" && method === "GET") {
-      const items = await prisma.orderItem.findMany();
+      const items = await getPrisma().orderItem.findMany();
       const totalItemsReceived = items.reduce((sum, item) => sum + item.quantityReceived, 0);
       const availableInStock = items.reduce((sum, item) => sum + item.availableQuantity, 0);
       const currentlyDeployed = items.filter(i => i.itemType === 'REUSABLE').reduce((sum, item) => sum + item.quantityDeployed, 0);
       const fullyUsedOrOutOfStock = items.filter(i => i.availableQuantity === 0).length;
 
-      const allTx = await prisma.usageTransaction.findMany({
+      const allTx = await getPrisma().usageTransaction.findMany({
         where: { status: 'ACTIVE' },
         include: { items: { include: { orderItem: true } } },
         orderBy: { usageDate: 'asc' },
@@ -233,7 +283,7 @@ export default async (req: Request, context: Context) => {
         .slice(0, 5);
 
       // Recent Usage Records
-      const recentUsageRecords = await prisma.usageTransaction.findMany({
+      const recentUsageRecords = await getPrisma().usageTransaction.findMany({
         take: 5,
         orderBy: { usageDate: 'desc' },
         include: {
@@ -270,13 +320,13 @@ export default async (req: Request, context: Context) => {
 
     // 3. GET /api/dashboard/stats
     if (path === "/api/dashboard/stats" && method === "GET") {
-      const items = await prisma.orderItem.findMany();
+      const items = await getPrisma().orderItem.findMany();
       const totalReceived = items.reduce((sum, item) => sum + item.quantityReceived, 0);
       const totalAvailable = items.reduce((sum, item) => sum + item.availableQuantity, 0);
       const currentlyDeployed = items.filter(i => i.itemType === 'REUSABLE').reduce((sum, item) => sum + item.quantityDeployed, 0);
       const outOfStockItems = items.filter(i => i.availableQuantity === 0).length;
 
-      const activeTxItems = await prisma.usageTransactionItem.findMany({
+      const activeTxItems = await getPrisma().usageTransactionItem.findMany({
         where: { usageTransaction: { status: 'ACTIVE' } },
       });
       const totalUsedThisMonth = activeTxItems.reduce((sum, ti) => sum + ti.quantity, 0);
@@ -297,7 +347,7 @@ export default async (req: Request, context: Context) => {
 
     // 4. GET /api/dashboard/charts
     if (path === "/api/dashboard/charts" && method === "GET") {
-      const allTx = await prisma.usageTransaction.findMany({
+      const allTx = await getPrisma().usageTransaction.findMany({
         where: { status: 'ACTIVE' },
         include: { items: { include: { orderItem: true } } },
       });
@@ -359,7 +409,7 @@ export default async (req: Request, context: Context) => {
 
     // 5. GET /api/dashboard/low-stock
     if (path === "/api/dashboard/low-stock" && method === "GET") {
-      const items = await prisma.orderItem.findMany({
+      const items = await getPrisma().orderItem.findMany({
         where: { availableQuantity: 0 },
         include: { order: true },
       });
@@ -392,7 +442,7 @@ export default async (req: Request, context: Context) => {
         }
       }
 
-      const orders = await prisma.order.findMany({
+      const orders = await getPrisma().order.findMany({
         where: whereClause,
         include: { items: true },
         orderBy: { orderNumber: 'desc' },
@@ -426,7 +476,7 @@ export default async (req: Request, context: Context) => {
         }
       }
 
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await getPrisma().$transaction(async (tx) => {
         const lastOrder = await tx.order.findFirst({
           orderBy: { orderNumber: 'desc' },
         });
@@ -483,7 +533,7 @@ export default async (req: Request, context: Context) => {
     if (orderMatch) {
       const orderId = orderMatch[1];
       if (method === "GET") {
-        const order = await prisma.order.findUnique({
+        const order = await getPrisma().order.findUnique({
           where: { id: orderId },
           include: { items: true },
         });
@@ -512,7 +562,7 @@ export default async (req: Request, context: Context) => {
           return new Response(JSON.stringify({ error: 'Missing required fields.' }), { status: 400, headers: corsHeaders });
         }
 
-        const existingOrder = await prisma.order.findUnique({
+        const existingOrder = await getPrisma().order.findUnique({
           where: { id: orderId },
           include: { items: true },
         });
@@ -520,7 +570,7 @@ export default async (req: Request, context: Context) => {
           return new Response(JSON.stringify({ error: 'Order not found.' }), { status: 404, headers: corsHeaders });
         }
 
-        const updated = await prisma.$transaction(async (tx) => {
+        const updated = await getPrisma().$transaction(async (tx) => {
           const incomingItemIds = items.filter(i => i.id).map(i => i.id);
           const itemsToDelete = existingOrder.items.filter(ei => !incomingItemIds.includes(ei.id));
 
@@ -601,7 +651,7 @@ export default async (req: Request, context: Context) => {
     const orderUsageMatch = path.match(/^\/api\/orders\/([^\/]+)\/usage$/);
     if (orderUsageMatch && method === "GET") {
       const orderId = orderUsageMatch[1];
-      const txs = await prisma.usageTransaction.findMany({
+      const txs = await getPrisma().usageTransaction.findMany({
         where: {
           items: {
             some: {
@@ -640,7 +690,7 @@ export default async (req: Request, context: Context) => {
         };
       }
 
-      const txs = await prisma.usageTransaction.findMany({
+      const txs = await getPrisma().usageTransaction.findMany({
         where: whereClause,
         include: {
           items: {
@@ -691,7 +741,7 @@ export default async (req: Request, context: Context) => {
         return new Response(JSON.stringify({ error: 'At least one item with quantity greater than zero is required.' }), { status: 400, headers: corsHeaders });
       }
 
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await getPrisma().$transaction(async (tx) => {
         for (const item of validatedItems) {
           const dbItem = await tx.orderItem.findUnique({
             where: { id: item.orderItemId },
@@ -765,7 +815,7 @@ export default async (req: Request, context: Context) => {
     if (usageMatch) {
       const usageId = usageMatch[1];
       if (method === "GET") {
-        const tx = await prisma.usageTransaction.findUnique({
+        const tx = await getPrisma().usageTransaction.findUnique({
           where: { id: usageId },
           include: {
             items: {
@@ -789,7 +839,7 @@ export default async (req: Request, context: Context) => {
         const body = await req.json();
         const { notes, status } = body;
 
-        const existing = await prisma.usageTransaction.findUnique({
+        const existing = await getPrisma().usageTransaction.findUnique({
           where: { id: usageId },
           include: { items: { include: { orderItem: true } } },
         });
@@ -798,7 +848,7 @@ export default async (req: Request, context: Context) => {
           return new Response(JSON.stringify({ error: 'Usage record not found.' }), { status: 404, headers: corsHeaders });
         }
 
-        const updated = await prisma.$transaction(async (tx) => {
+        const updated = await getPrisma().$transaction(async (tx) => {
           const nextStatus = status !== undefined ? status : existing.status;
 
           const updatedTx = await tx.usageTransaction.update({
@@ -819,7 +869,7 @@ export default async (req: Request, context: Context) => {
             await syncOrderAndItemStatuses(orderId, tx);
           }
 
-          const finalTx = await tx.usageTransaction.findUnique({
+          const finalTx = await getPrisma().usageTransaction.findUnique({
             where: { id: usageId },
             include: { items: { include: { orderItem: true } } },
           });
@@ -846,7 +896,7 @@ export default async (req: Request, context: Context) => {
     const voidMatch = path.match(/^\/api\/usages?\/([^\/]+)\/void$/);
     if (voidMatch && method === "POST") {
       const usageId = voidMatch[1];
-      const existing = await prisma.usageTransaction.findUnique({
+      const existing = await getPrisma().usageTransaction.findUnique({
         where: { id: usageId },
         include: { items: { include: { orderItem: true } } },
       });
@@ -855,7 +905,7 @@ export default async (req: Request, context: Context) => {
         return new Response(JSON.stringify({ error: 'Usage record not found.' }), { status: 404, headers: corsHeaders });
       }
 
-      const updated = await prisma.$transaction(async (tx) => {
+      const updated = await getPrisma().$transaction(async (tx) => {
         const finalTx = await tx.usageTransaction.update({
           where: { id: usageId },
           data: { status: 'VOIDED' },
@@ -890,7 +940,7 @@ export default async (req: Request, context: Context) => {
 
     // 14. GET /api/audit-logs
     if (path === "/api/audit-logs" && method === "GET") {
-      const logs = await prisma.auditLog.findMany({
+      const logs = await getPrisma().auditLog.findMany({
         orderBy: { timestamp: 'desc' },
       });
       return new Response(JSON.stringify(logs), { status: 200, headers: corsHeaders });
@@ -929,16 +979,54 @@ export default async (req: Request, context: Context) => {
 
     // Route genuinely not found
     return new Response(
-      JSON.stringify({ error: "Route not found" }),
+      JSON.stringify({
+        success: false,
+        code: "ROUTE_NOT_FOUND",
+        message: "Route not found"
+      }),
       { status: 404, headers: corsHeaders }
     );
 
   } catch (error: any) {
     console.error("Netlify function server-side error:", error);
+
+    if (error.name === "DATABASE_URL_MISSING" || error.message === "DATABASE_URL_MISSING") {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "DATABASE_URL_MISSING",
+          message: "Database configuration is unavailable."
+        }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    const isDbConnectionError = 
+      error.code?.startsWith("P10") || 
+      error.code?.startsWith("P20") ||
+      error.message?.includes("Can't reach database") ||
+      error.message?.includes("connect") ||
+      error.message?.includes("Neon") ||
+      error.message?.includes("connection") ||
+      error.message?.includes("PrismaClient") ||
+      error.name?.includes("PrismaClient") ||
+      error.name?.includes("Initialization");
+
+    if (isDbConnectionError) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "DATABASE_CONNECTION_FAILED",
+          message: "Database connection failed."
+        }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
     return new Response(
       JSON.stringify({
         success: false,
-        message: "An internal server error occurred.",
+        message: error.message || "An internal server error occurred.",
       }),
       { status: 500, headers: corsHeaders }
     );
