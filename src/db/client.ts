@@ -1,9 +1,25 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+let prisma: PrismaClient | null = null;
 
-export const prisma = globalForPrisma.prisma || new PrismaClient({
-  log: ['error'],
-});
+export function getPrisma() {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+  if (!databaseUrl) {
+    const error = new Error("DATABASE_URL_MISSING");
+    error.name = "DATABASE_URL_MISSING";
+    throw error;
+  }
+
+  if (!prisma) {
+    prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: databaseUrl,
+        },
+      },
+    });
+  }
+
+  return prisma;
+}
